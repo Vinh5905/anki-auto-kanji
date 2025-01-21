@@ -107,7 +107,7 @@ def show_data():
     print(horizontal_line)
 
 
-def app_nap_setting_for_anki(disabled: False):
+def disable_app_napp(disabled: False):
     status = 'true' if disabled else 'false'
 
     commands = [
@@ -119,7 +119,7 @@ def app_nap_setting_for_anki(disabled: False):
     for cmd in commands:
         subprocess.run(cmd, shell=True)
 
-def add_notes(data):
+def check_potential_add_notes(data):
     url = 'http://localhost:8765'
 
     deck_name = 'Kanji N3'
@@ -136,7 +136,7 @@ def add_notes(data):
         notes.append(note)
 
     request = {
-        "action": "addNotes",
+        "action": "canAddNotesWithErrorDetail",
         "version": 6,
         "params": {
             "notes": notes
@@ -146,38 +146,37 @@ def add_notes(data):
     response = requests.post(url, json=request)
     response.raise_for_status()
 
-    print(response.json())
-
-def run(kanji_list):
-    try:
-        app_nap_setting_for_anki(disabled=True)
-
-        data_response = response_from_gpt(kanji_list)
-        data_list = get_list_item_from_response(data_response)
-        data_dict = transform_list_to_dict(data_list)
-
-        save_to_csv(data_dict)
-
-        show_data()
-
-        print('Chỉnh sửa file csv nếu cần trước khi import vào Anki!!')
-        answer = input('Nếu thấy ổn hãy ấn [Y]      : ')
-        if answer in ('Y', 'y'):
-            data = read_data_from_csv()
-            data_dict = transform_list_to_dict(data)
-
-            add_notes(data_dict)
-        else:
-            print('Data nằm trong csv nhưng chưa được import vào Anki!!')
-
-    except Exception as e:
-        print(f'Error: {e}')
-    finally:
-        app_nap_setting_for_anki(disabled=False)
-
-if __name__ == '__main__':
-    kanji_list = []
-    run(kanji_list)
+    results = response.json()
+    results = [res_one_note['canAdd'] for res_one_note in results['result']]
+    return results
 
 
+def add_notes(data, canAdd):
+    url = 'http://localhost:8765'
+
+    deck_name = 'Kanji N3'
+    model_name = 'Kanji'
+
+    notes = []
+    for index, fields in enumerate(data):
+        if canAdd[index]:
+            note = {
+                "deckName": deck_name,
+                "modelName": model_name,
+                "fields": fields
+            }
+
+            notes.append(note)
+
+    request = {
+        "action": "addNotes",
+        "version": 6,
+        "params": {
+            "notes": notes
+        }
+    }
+
+    response = requests.post(url, json=request)
+    response.raise_for_status()
+    return response.json()
 
