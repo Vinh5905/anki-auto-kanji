@@ -2,3 +2,4 @@ requests
 streamlit
 watchdog
 pandas
+openpyxl

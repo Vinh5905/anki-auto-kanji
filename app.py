@@ -1,6 +1,8 @@
 import streamlit as st
-from main import get_list_item_from_response, transform_list_to_dict, response_from_gpt, save_to_csv, add_notes, check_potential_add_notes, read_data_from_csv, disable_app_napp
+from support_func import get_list_item_from_response, transform_list_to_dict, response_from_gpt, save_to_csv, add_notes, check_potential_add_notes, read_data_from_csv, disable_app_napp
+from st_support_func import kanji_data_review, save
 import pandas as pd
+import csv
 
 st.set_page_config(layout='wide')
 
@@ -11,136 +13,116 @@ if 'app-napp-disabled' not in st.session_state:
 st.title('Welcome back, :rainbow[Kevin Pham]! :sunglasses:')
 st.divider()
 
-st.subheader(":rainbow[What kanji you want to add to Anki today?]")
+st.markdown('''
+    <style>
+    /* Thay đổi khoảng cách giữa các tab */
+    div.stTabs > div > div > div {
+        gap: 3rem !important;
+    }
+            
+    button[data-baseweb='tab'] p {
+        font-size: 18px;
+        font-weight: 600;
+    }
+    </style>
+''', unsafe_allow_html=True)
 
-# text area
-placeholder = '''What kanji N3 you want to add to Anki today?
-Example: 
-    教室
-    大学
-    代表
-'''
+st.subheader(':rainbow[Choose way to add?]')
+all_tabs = st.tabs(["LIST KANJI", "CSV", "EXCEL"])
 
-kanji_list = st.text_area(
-    label='Kanji you want to add ~~', 
-    placeholder=placeholder,
-    height=300,
-    label_visibility='collapsed'
-)
+# WAY OF LIST KANJI
+with all_tabs[0]:
+    st.subheader(":rainbow[What kanji you want to add to Anki today?]")
+    # text area
+    placeholder = '''What kanji N3 you want to add to Anki today?
+    Example: 
+        教室
+        大学
+        代表
+    '''
 
-if 'translate' not in st.session_state:
-    st.session_state['translate'] = False
+    kanji_list = st.text_area(
+        label='Kanji you want to add ~~', 
+        placeholder=placeholder,
+        height=300,
+        label_visibility='collapsed'
+    )
 
-if 'save' not in st.session_state:
-    st.session_state['save'] = False
+    if 'translate' not in st.session_state:
+        st.session_state['translate'] = False
 
-translate = st.button(label='Translate', type='primary')
-if translate or st.session_state['translate']:
-    st.session_state['translate'] = True
-    with st.spinner('Translating...'):
-        if 'df' not in st.session_state:
-            # data from gpt to anki
-            st.snow()
-            kanji_list = kanji_list.split('\n')
-            kanji_list = [item.strip() for item in kanji_list if item]
-            kanji_not_dup = []
-            for kanji in kanji_list:
-                if kanji not in kanji_not_dup:
-                    kanji_not_dup.append(kanji)
-
-            data_response = response_from_gpt(kanji_not_dup)
-            st.toast('Get data from GPT successfully', icon='🎉')
-            data_list = get_list_item_from_response(data_response)
-            data_dict = transform_list_to_dict(data_list)
-
-            # data from csv to anki
-            # data_csv = read_data_from_csv()
-            # data_dict = transform_list_to_dict(data_csv)
-
-            df = pd.DataFrame(data_dict)
-            st.session_state['df'] = df
-
+    translate = st.button(label='Translate', type='primary')
+    if translate or st.session_state['translate']:
         st.session_state['translate'] = True
 
-        st.divider()
-        st.subheader(":rainbow[Review before save]")
+        with st.spinner('Translating...'):
+            if 'df_list_kanji' not in st.session_state:
+                # data from gpt to anki
+                st.snow()
+                kanji_list = kanji_list.split('\n')
+                kanji_list = [item.strip() for item in kanji_list if item]
+                kanji_not_dup = []
+                for kanji in kanji_list:
+                    if kanji not in kanji_not_dup:
+                        kanji_not_dup.append(kanji)
 
-        edited_df = st.data_editor(
-            st.session_state['df'],
-            use_container_width=True,  
-            column_config={
-                "Kanji": st.column_config.Column(
-                    width="medium",
-                    required=True,
-                ),
-                "Hiragana": st.column_config.Column(
-                    width="large",
-                    required=True,
-                ),
-                "Chinese character": st.column_config.Column(
-                    width="medium",
-                    required=True,
-                ),
-                "Meaning": st.column_config.Column(
-                    width="large",
-                    required=True,
-                )
-            }
-        )
+                data_response = response_from_gpt(kanji_not_dup)
+                st.toast('Get data from GPT successfully', icon='🎉')
+                data_list = get_list_item_from_response(data_response)
+                data_dict = transform_list_to_dict(data_list)
 
-    save = st.button(label='Save', type='primary', key='save_clicked')
-    if save or st.session_state['save']:
-        st.session_state['save'] = True
+                # data from csv to anki
+                # data_csv = read_data_from_csv()
+                # data_dict = transform_list_to_dict(data_csv)
 
-        with st.spinner('Saving...'):
+                df = pd.DataFrame(data_dict)
+                st.session_state['df_list_kanji'] = df
+
             st.divider()
-            st.subheader(":rainbow[Status of cards when add to Anki]")
+            st.subheader(":rainbow[Review before save]")
 
-            if st.session_state['save_clicked']:
-                st.session_state['df'] = edited_df
+            edited_df_list_kanji = kanji_data_review(st, 'df_list_kanji', 'data_editor')
+            save(st, 'df_list_kanji', edited_df_list_kanji, 0)
 
-                data_dict = st.session_state['df'].to_dict('records')
 
-                canAdd = check_potential_add_notes(data_dict)
+# WAY OF CSV
+with all_tabs[1]:
+    uploaded_file = st.file_uploader('Choose a CSV file!')
+    if uploaded_file is not None:
+        with st.spinner('Loading...'):
+            if 'df_csv' not in st.session_state:
+                # Đọc file CSV
+                data_csv = csv.DictReader(uploaded_file.read().decode('utf-8').splitlines())
+                # Hiển thị từng hàng trong file CSV
+                rows = []
+                for row in data_csv:
+                    rows.append(row)
 
-                save_to_csv(data_dict)
-                ressponse = add_notes(data_dict, canAdd)
-                print(ressponse)
+                df = pd.DataFrame(rows)
+                st.session_state['df_csv'] = df
 
-                st.toast('Save successfully', icon='🎉')
+            # ĐOẠN COPY
+            st.divider()
+            st.subheader(":rainbow[Review before save]")
 
-                result_add = st.session_state['df'].copy()
-                result_add['Add Status'] = canAdd
+            edited_df_csv = kanji_data_review(st, 'df_csv', 'data_editor')
+            save(st, 'df_csv', edited_df_csv, 1)
 
-                st.session_state['result'] = result_add
 
-            if 'result' in st.session_state:
-                st.dataframe(
-                    st.session_state['result'],
-                    use_container_width=True,  
-                    column_config={
-                        "Kanji": st.column_config.Column(
-                            width="medium",
-                            required=True,
-                        ),
-                        "Hiragana": st.column_config.Column(
-                            width="large",
-                            required=True,
-                        ),
-                        "Chinese character": st.column_config.Column(
-                            width="medium",
-                            required=True,
-                        ),
-                        "Meaning": st.column_config.Column(
-                            width="large",
-                            required=True,
-                        ),
-                        "Add Status": st.column_config.Column(
-                            width="medium",
-                            required=True,
-                        )
-                    }
-                )
+# WAY OF EXCEL
+with all_tabs[2]:
+    uploaded_file = st.file_uploader('Choose a EXCEL file!', type=['xlsx', 'xls'])
+    if uploaded_file is not None:
+        with st.spinner('Loading...'):
+            if 'df_excel' not in st.session_state:
+                data_excel = pd.read_excel(uploaded_file, engine='openpyxl') # dataframe
+                data_excel_to_dict = data_excel.to_dict('records')
 
-                st.write(':orange[__Lưu ý:__] _Nếu từ ở trạng thái không tích nghĩa là :green[__đã tồn tại__] từ đó trong Anki của bạn !!_')
-        
+                st.session_state['df_excel'] = data_excel
+
+            # ĐOẠN COPY
+            st.divider()
+            st.subheader(":rainbow[Review before save]")
+
+            edited_df_excel = kanji_data_review(st, 'df_excel', 'data_editor')
+            save(st, 'df_excel', edited_df_excel, 2)

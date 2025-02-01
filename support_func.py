@@ -7,6 +7,14 @@ from pathlib import Path
 import headers
 
 def response_from_gpt(list_kanji):
+    # For test
+    # return {'result': '```\n'
+    #        '正式, せいしき (Noun), CHÍNH THỨC, chính thức.\n'
+    #        '形式, けいしき (Noun), HÌNH THỨC, hình thức.\n'
+    #        '```',
+    # 'server_code': 'dg',
+    # 'status': True}
+
     url = "https://chatgpt-42.p.rapidapi.com/gpt4"
 
     payload = {
